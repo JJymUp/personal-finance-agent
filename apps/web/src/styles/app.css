@@ -1,0 +1,134 @@
+:root {
+  --h5-max-width: 430px;
+  --van-primary-color: #1677ff;
+  --van-background: #f5f7fa;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #ebedf0;
+  color: #1f2329;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Mobile-first H5 container: full width on phone, 430px centered on PC (H-01) */
+.h5-shell {
+  width: 100%;
+  max-width: var(--h5-max-width);
+  min-height: 100dvh;
+  margin-inline: auto;
+  background-color: var(--van-background);
+  box-shadow: 0 0 24px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  word-break: break-word;
+}
+
+.h5-page {
+  padding: 12px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.h5-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.h5-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2329;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.h5-muted {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.h5-mono-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+}
+
+.h5-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.h5-stat-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.h5-stat-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.h5-stat-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.h5-btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Keep all body-mounted Vant overlays aligned to the 430px H5 shell (H-01) */
+.van-tabbar--fixed,
+.van-nav-bar--fixed {
+  max-width: var(--h5-max-width) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  right: auto !important;
+}
+
+.van-popup--bottom,
+.van-action-sheet {
+  max-width: var(--h5-max-width) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  right: auto !important;
+}
+
+.van-popup--center,
+.van-dialog {
+  max-width: calc(var(--h5-max-width) - 32px) !important;
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@maggot/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit && vue-tsc -p tsconfig.h5.json --noEmit",
+    "lint": "eslint src/",
+    "build": "tsc -p tsconfig.build.json && vite build"
+  },
+  "dependencies": {
+    "@maggot/contracts": "workspace:*",
+    "dexie": "^4.0.11",
+    "pinia": "^4.1.0",
+    "vant": "^4.10.2",
+    "vue": "^3.5.45",
+    "vue-router": "^5.5.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.8",
+    "vitest": "^3.0.7",
+    "vue-tsc": "^3.3.14"
+  }
+}

@@ -1,0 +1,72 @@
+# Internal design, reviews and agent-local working material
+/docs/
+/work/
+/outputs/
+/.claude/
+/.codex/
+/.agents/
+/.gstack/
+/.superpowers/
+/CLAUDE.md
+/AGENTS.md
+
+# Environment files: only the reviewed root example is public
+.env
+.env.*
+env.local
+env.*.local
+*.env
+!/.env.example
+.npmrc
+.pypirc
+.netrc
+
+# Credentials and private certificates
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+/secrets/
+/credentials/
+/.ssh/
+/.aws/
+
+# Personal financial records, exports and runtime databases
+/data/
+/backups/
+/exports/
+/uploads/
+/downloads/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.log
+/scripts/eval-results/
+
+# Dependencies, caches and generated bundles
+node_modules/
+.pnpm-store/
+.cache/
+.vite/
+.vite-temp/
+dist/
+dist-h5/
+coverage/
+*.tsbuildinfo
+/packages/contracts/src/*.d.ts
+/packages/contracts/src/*.d.ts.map
+
+# Browser-test artifacts and local editor/system files
+playwright-report/
+test-results/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
