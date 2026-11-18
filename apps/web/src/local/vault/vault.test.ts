@@ -3,6 +3,7 @@ import {
   ClientVault,
   MemoryStorage,
   VAULT_GOALS_KEY,
+  VAULT_CHAT_KEY,
   VAULT_TXNS_KEY,
   VAULT_REPORTS_KEY,
 } from './vault.js';
@@ -23,6 +24,19 @@ describe('Client Vault & Security (H-02, H-03, O-01, O-02, O-03)', () => {
       updatedAt: '2026-11-10T00:00:00Z',
     },
   };
+
+  it('聊天与金额映射以密文保存，并随全量备份恢复', async () => {
+    const storage = new MemoryStorage(); const vault = new ClientVault(storage);
+    await vault.unlock('synthetic-chat-backup'); await vault.saveProfile(sampleProfile);
+    const chat = {messages:[{id:'m1',role:'user',text:'合成预算123456元',safeText:'合成预算[金额:amount_1]',status:'done',createdAt:'2026-11-17'}],amounts:[{id:'amount_1',cents:12345600}]};
+    await vault.saveSecretJson(VAULT_CHAT_KEY,chat);
+    const encrypted=await storage.getItem(VAULT_CHAT_KEY);
+    expect(encrypted).not.toContain('123456'); expect(encrypted).not.toContain('合成预算');
+    const restored=new ClientVault(new MemoryStorage());
+    await restored.unlock('synthetic-chat-backup');
+    await restored.importBackup(await vault.exportBackup(),'synthetic-chat-backup');
+    expect(await restored.loadSecretJson(VAULT_CHAT_KEY)).toEqual(chat);
+  });
 
   it('H-02/O-01: Encrypts data in storage without sensitive plaintext', async () => {
     const storage = new MemoryStorage();

@@ -17,6 +17,19 @@ describe('FIX-07 committed versions are owned by the store', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it('聊天记录加密持久化，锁定清除内存，恢复时标记中断消息', async () => {
+    const store = useFinanceStore();
+    await store.unlockVault('synthetic-chat');
+    await store.saveConversation({messages:[{id:'synthetic-message',role:'user',text:'我的预算123456元',safeText:'我的预算[金额:amount_1]',status:'done',createdAt:'2026-11-17'},
+      {id:'pending-message',role:'assistant',text:'正在回复',status:'pending',createdAt:'2026-11-17'}],amounts:[{id:'amount_1',cents:12345600}]});
+    store.lockVault();
+    expect(store.conversation.messages).toEqual([]);
+    await store.unlockVault('synthetic-chat');
+    expect(store.conversation.messages[0].text).toBe('我的预算123456元');
+    expect(store.conversation.messages[1]).toMatchObject({status:'error',text:'上次回复中断了。你可以重新发送问题。'});
+    expect(store.conversation.amounts[0].cents).toBe(12345600);
+  });
+
   it('returns the saved profile with exactly one version increment regardless of caller version', async () => {
     const store = useFinanceStore(); await store.unlockVault('synthetic-store-password');
     if (!store.profile) throw new Error('Missing profile');

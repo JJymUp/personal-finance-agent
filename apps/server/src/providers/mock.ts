@@ -1,3 +1,5 @@
+import { mockConversation } from './conversation.js';
+import type { ConversationRequest, ConversationResponse } from '@maggot/contracts';
 import { sanitizeUntrustedText, type FollowUpIntent } from '@maggot/contracts';
 import type {
   ModelProvider,
@@ -38,6 +40,8 @@ export class MockModelProvider implements ModelProvider {
   setBehavior(behavior: NonNullable<MockProviderOptions['behavior']>): void {
     this.behavior = behavior;
   }
+
+  async generateConversation(input: ConversationRequest): Promise<ConversationResponse> { return mockConversation(input); }
 
   async generateStep(input: ModelStepInput): Promise<ModelStepOutput> {
     if (this.behavior === 'fail_step') {
@@ -96,6 +100,12 @@ export class MockModelProvider implements ModelProvider {
         (t) => t.request.toolName === 'evaluate_scenario'
       ).length;
 
+      if (input.safeGoalSummary.assessment_scope === 'monthly_budget' && lastStatus === 'unknown' &&
+          lastTool.result.toolName === 'evaluate_scenario' && lastTool.result.missingFieldCategory &&
+          !input.toolHistory.some(item => item.request.toolName === 'request_clarification')) {
+        return {type:'request_tool', toolRequest:{toolName:'request_clarification',params:{fieldCategory:lastTool.result.missingFieldCategory}},reasoning:'补充月度测算所需的信息'};
+      }
+
       // If original plan was violated and an alternative scenario exists, try alternative
       if (lastStatus === 'violated' && evaluatedCount === 1) {
         const altScenario = input.candidateScenarios.find((s) => s.scenarioId !== lastScenarioId);
@@ -128,10 +138,10 @@ export class MockModelProvider implements ModelProvider {
         lastStatus === 'satisfied' && isEvaluatedReliable ? 'viable' : 'caution';
       let tradeOffSummary =
         verdict === 'viable'
-          ? 'Based on verified local cashflow, this scenario preserves your required cash buffer.'
+          ? '本地核算显示，该方案可以保留设定的应急资金。'
           : lastStatus === 'unknown' || !isEvaluatedReliable
-            ? 'Insufficient or partially modeled financial inputs; treat projection as tentative until missing items are confirmed.'
-            : 'Based on verified local cashflow, this scenario experiences a temporary cash deficit.';
+            ? '目前仍有未确认的收支信息，这次结果只能作为初步估算。'
+            : '本地核算显示，该方案仍存在资金缺口，建议降低目标或继续积累资金。';
 
       if (this.behavior === 'unsafe_markup_output') {
         tradeOffSummary =

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import { RunRequestSchema, SafeToolResultSchema, FollowUpRequestSchema } from '@maggot/contracts';
+import { ConversationRequestSchema, ConversationResponseSchema, RunRequestSchema, SafeToolResultSchema, FollowUpRequestSchema } from '@maggot/contracts';
 import { SessionStore, SessionStoreError } from './agent/store.js';
 import type { ModelProvider } from './providers/types.js';
 import { MockModelProvider } from './providers/mock.js';
@@ -172,6 +172,21 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
       provider: options.providerInfo?.model ?? provider.name,
       providerMode: options.providerInfo?.providerMode ?? 'mock',
     };
+  });
+
+  // Natural-language entry receives only browser-redacted text and coarse profile fields.
+  const conversationLimiter = new RateLimiter({ maxRequests: 20, windowMs: 60_000 });
+  app.post('/api/conversation', async (request, reply) => {
+    if (!conversationLimiter.check(request.ip).allowed) return reply.status(429).send({error:'RATE_LIMIT_EXCEEDED'});
+    const parsed=ConversationRequestSchema.safeParse(request.body);
+    if(!parsed.success) return reply.status(400).send({error:'INVALID_CONVERSATION_REQUEST'});
+    if(!provider.generateConversation) return reply.status(503).send({error:'CONVERSATION_UNAVAILABLE'});
+    const controller=new AbortController();
+    const onClose=() => { if(!reply.raw.writableEnded) controller.abort(); };
+    reply.raw.on('close',onClose);
+    try { return reply.send(ConversationResponseSchema.parse(await provider.generateConversation(parsed.data,controller.signal))); }
+    catch { return reply.status(502).send({error:'CONVERSATION_FAILED',message:'暂时没能完成这次回复，请稍后重试。'}); }
+    finally { reply.raw.off('close',onClose); }
   });
 
   // POST /api/runs

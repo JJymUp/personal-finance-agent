@@ -203,6 +203,7 @@ export function deriveSafeGoalSummary(
 
   const rawGoal: SafeGoalSummary = {
     task_type: goal.taskType ?? 'large_purchase',
+    ...(goal.assessmentScope ? {assessment_scope:goal.assessmentScope} : {}),
     horizon,
     cost_in_monthly_surplus: costInSurplus,
     timing_flexibility: goal.timingFlexibility === 'flexible' ? 'flexible' : 'fixed',

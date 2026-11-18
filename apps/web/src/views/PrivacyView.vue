@@ -67,6 +67,8 @@
       </div>
     </div>
 
+    <section class="h5-card"><div class="h5-card-title">聊天文字的处理方式</div><p class="h5-muted">画像原始金额仍留在浏览器。聊天文字会先在本地识别并替换金额、账号等信息，再发给 AI；自动识别不能保证覆盖所有敏感表达，请勿粘贴密码或完整账户资料。</p></section>
+    <VaultBackup />
     <!-- Outbound Audit Log -->
     <div class="h5-card">
       <div class="h5-card-title">
@@ -89,6 +91,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { showConfirmDialog, showToast } from 'vant';
+import VaultBackup from '../components/VaultBackup.vue';
 import { useFinanceStore } from '../stores/finance';
 
 const store = useFinanceStore();

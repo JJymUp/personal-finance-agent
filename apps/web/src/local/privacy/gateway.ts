@@ -1,4 +1,6 @@
 import {
+  ConversationRequestSchema,
+  type ConversationRequest,
   RunRequestSchema,
   SafeToolResultSchema,
   FollowUpRequestSchema,
@@ -80,6 +82,15 @@ export class PrivacyGateway {
       }
     }
     return true;
+  }
+
+  inspectConversation(input: unknown, targetProvider: string): ConversationRequest {
+    if (!this.isAuthorized(targetProvider, ['profile_summary', 'chat_text'])) throw new Error('Conversation not authorized');
+    const parsed = ConversationRequestSchema.parse(input);
+    if (parsed.profile.family_burden_category && !this.hasScope('family_summary')) throw new Error('Family summary not authorized');
+    this.assertNoSensitiveTokens(JSON.stringify(parsed));
+    this.auditLog.push({timestamp:new Date().toISOString(),action:'OUTBOUND_CHAT_APPROVED',payloadType:'ConversationRequest',details:'Local redaction applied; raw text not logged'});
+    return parsed;
   }
 
   getAuditLog() {

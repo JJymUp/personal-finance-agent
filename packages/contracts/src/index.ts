@@ -120,6 +120,7 @@ export type TimingFlexibility = z.infer<typeof TimingFlexibilitySchema>;
 export const SafeGoalSummarySchema = z
   .object({
     task_type: GoalTaskTypeSchema,
+    assessment_scope: z.literal('monthly_budget').optional(),
     horizon: GoalHorizonBucketSchema,
     cost_in_monthly_surplus: CostInSurplusBucketSchema,
     timing_flexibility: TimingFlexibilitySchema,
@@ -194,6 +195,7 @@ export const AuthorizationScopeNameSchema = z.enum([
   'scenarios',
   'clarification',
   'follow_up',
+  'chat_text',
 ]);
 export type AuthorizationScopeName = z.infer<typeof AuthorizationScopeNameSchema>;
 
@@ -275,6 +277,7 @@ export const EvaluateScenarioToolResultSchema = z
     status: z.enum(['satisfied', 'violated', 'unknown']),
     gapHorizon: GapHorizonBucketSchema.optional(),
     isReliable: z.boolean(),
+    assessmentScope: z.literal('monthly_budget').optional(),
     missingFieldCategory: ClarificationFieldCategorySchema.optional(),
     evidenceId: z.string().min(1).max(128),
     versionBinding: VersionBindingSchema,
@@ -472,3 +475,34 @@ export function sanitizeUntrustedText(text: string): string {
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
+
+// 对话入口只传本地金额引用，精确金额仍由浏览器保管。
+export const ConversationPlanContextSchema=z.object({taskType:GoalTaskTypeSchema,
+ amountRef:z.string().regex(/^(amount_\d+|monthly_income)$/),horizonMonths:z.number().int().min(0).max(120),
+ reserveMonths:z.number().int().min(0).max(12),timingFlexibility:z.enum(['fixed','flexible']).default('flexible'),
+ amountMode:z.enum(['total','per_month']).default('total')}).strict();
+export type ConversationPlanContext=z.infer<typeof ConversationPlanContextSchema>;
+export const ConversationRequestSchema = z.object({
+  activePlan:ConversationPlanContextSchema.optional(),
+  messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(1600) }).strict()).min(1).max(12),
+  profile: SafeProfileSummarySchema,
+  amountRefs: z.array(z.object({ id: z.string().regex(/^amount_\d+$/), currency: z.enum(['CNY','USD']).optional() }).strict()).max(32),
+}).strict();
+export type ConversationRequest = z.infer<typeof ConversationRequestSchema>;
+export const ConversationResponseSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('reply'), text: z.string().min(1).max(1200) }).strict(),
+  z.object({ type: z.literal('plan'), text: z.string().min(1).max(500), taskType: GoalTaskTypeSchema,
+    amountRef: z.string().regex(/^(amount_\d+|monthly_income)$/),
+    horizonMonths: z.number().int().min(0).max(120), reserveMonths: z.number().int().min(0).max(12),
+    timingFlexibility:z.enum(['fixed','flexible']).default('flexible'),amountMode:z.enum(['total','per_month']).default('total'),
+  }).strict(),
+]).superRefine((value, ctx) => {
+  if (value.type !== 'plan') return;
+  if ((value.amountRef === 'monthly_income' || value.amountMode === 'per_month') && value.taskType !== 'income_reduction') {
+    ctx.addIssue({code:'custom',message:'月收入引用与每月缺口仅用于收入下降测算'});
+  }
+  if (value.taskType === 'income_reduction' && value.horizonMonths === 0) {
+    ctx.addIssue({code:'custom',message:'收入下降测算需要明确影响期限'});
+  }
+});
+export type ConversationResponse = z.infer<typeof ConversationResponseSchema>;

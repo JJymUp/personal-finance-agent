@@ -1,3 +1,4 @@
+import { ChatStateSchema } from '../../features/chat/types.js';
 import { z } from 'zod';
 import { encryptData, decryptData, type EncryptedPayload } from './crypto.js';
 import type { UserProfile } from '../../features/profile/types.js';
@@ -5,6 +6,7 @@ import type { UserProfile } from '../../features/profile/types.js';
 export const VAULT_GOALS_KEY = 'maggot_goals_encrypted';
 export const VAULT_TXNS_KEY = 'maggot_txns_encrypted';
 export const VAULT_REPORTS_KEY = 'maggot_reports_encrypted';
+export const VAULT_CHAT_KEY = 'maggot_chat_encrypted';
 
 const DebtItemBackupSchema = z
   .object({
@@ -75,7 +77,8 @@ const BackupGoalSchema = z
     currency: z.string().optional(),
     taskType: z.enum(['large_purchase', 'income_reduction', 'savings_goal']).optional(),
     targetAmount: z.number().int().min(0),
-    targetHorizonMonths: z.number().int().min(1),
+    targetHorizonMonths: z.number().int().min(0),
+    assessmentScope: z.literal('monthly_budget').optional(),
     cashReserveFloor: z.number().int().min(0),
     timingFlexibility: z.enum(['fixed', 'flexible']),
     version: z.string().min(1),
@@ -129,7 +132,7 @@ const BackupReportSchema = z
     snapshotVersion: z.string().optional(),
     goalVersion: z.string().optional(),
     candidateScenarioIds: z.array(z.string()).optional(),
-    intraMonthLiquidityStatus: z.enum(['verified', 'unknown_missing_dates', 'unknown_same_day_order']).optional(),
+    intraMonthLiquidityStatus: z.enum(['verified', 'unknown_missing_dates', 'unknown_same_day_order', 'not_assessed_monthly_budget']).optional(),
     hasUncertainPriorSpend: z.boolean().optional(),
   })
   .strict();
@@ -137,6 +140,7 @@ const BackupReportSchema = z
 const FullBackupBundleSchema = z
   .object({
     bundleVersion: z.literal('2.0'),
+    conversation: ChatStateSchema.optional(),
     profile: UserProfileBackupSchema,
     goal: BackupGoalSchema.nullable().optional(),
     transactions: z.array(BackupTransactionSchema).optional(),
@@ -192,6 +196,8 @@ export class ClientVault {
   constructor(storage: VaultStorage = new MemoryStorage()) {
     this.storage = storage;
   }
+
+  async hasStoredVault(): Promise<boolean> { return (await this.storage.getItem(CHECK_TOKEN_KEY)) !== null; }
 
   isUnlocked(): boolean {
     return this.activePassphrase !== null;
@@ -319,9 +325,11 @@ export class ClientVault {
     const goal = await this.loadSecretJson<unknown>(VAULT_GOALS_KEY);
     const transactions = await this.loadSecretJson<unknown[]>(VAULT_TXNS_KEY);
     const reports = await this.loadSecretJson<unknown[]>(VAULT_REPORTS_KEY);
+    const conversation = await this.loadSecretJson<unknown>(VAULT_CHAT_KEY);
 
     const bundle = {
       bundleVersion: '2.0' as const,
+      ...(conversation !== null ? {conversation} : {}),
       profile,
       ...(goal !== null ? { goal } : {}),
       ...(transactions !== null ? { transactions } : {}),
@@ -381,6 +389,7 @@ export class ClientVault {
     let validatedGoal: unknown | undefined;
     let validatedTxns: unknown[] | undefined;
     let validatedReports: unknown[] | undefined;
+    let validatedChat: unknown | undefined;
 
     if (backup.backupVersion === '2.0') {
       const bundleRes = FullBackupBundleSchema.safeParse(parsedContent);
@@ -390,6 +399,7 @@ export class ClientVault {
         );
       }
       validatedProfile = bundleRes.data.profile;
+      validatedChat = bundleRes.data.conversation;
       validatedGoal = bundleRes.data.goal ?? undefined;
       validatedTxns = bundleRes.data.transactions;
       validatedReports = bundleRes.data.reports;
@@ -418,6 +428,7 @@ export class ClientVault {
       [PROFILE_KEY]: validatedProfile,
       [VAULT_TXNS_KEY]: validatedTxns ?? [],
       [VAULT_REPORTS_KEY]: validatedReports ?? [],
+      ...(validatedChat ? {[VAULT_CHAT_KEY]:validatedChat} : {}),
       ...(validatedGoal !== undefined ? { [VAULT_GOALS_KEY]: validatedGoal } : {}),
     };
     items[CHECK_TOKEN_KEY] = JSON.stringify(await encryptData('vault_ok', passphrase));

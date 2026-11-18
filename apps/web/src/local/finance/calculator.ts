@@ -20,6 +20,7 @@ const MAX_AMOUNT_CENTS = 100_000_000_00;
 const MAX_HORIZON_MONTHS = 360;
 
 export type IntraMonthLiquidityStatus =
+  | 'not_assessed_monthly_budget'
   | 'verified'
   | 'unknown_missing_dates'
   | 'unknown_same_day_order';
@@ -32,6 +33,7 @@ export interface CompetingGoalReserve {
 }
 
 export interface LargePurchaseGoal {
+  assessmentScope?: 'monthly_budget';
   id: string;
   name: string;
   currency?: string; // defaults to 'CNY'
@@ -46,6 +48,7 @@ export interface LargePurchaseGoal {
 }
 
 export interface ScenarioCalculationResult {
+  assessmentScope?: 'monthly_budget';
   scenarioId: string;
   scenarioKind: ScenarioKind;
   adjustmentTier: AdjustmentTier;
@@ -310,6 +313,31 @@ export function evaluateScenarioLocal(
     );
   }
 
+  if (goal.assessmentScope === 'monthly_budget') {
+    const baseline = calculateMonthlySurplus(profile);
+    let target = goal.targetAmount;
+    let months = goal.targetHorizonMonths;
+    let surplus = baseline.monthlySurplus;
+    if (scenario.scenarioKind === 'reduced_budget') target = Math.round(target * (scenario.adjustmentTier === 'moderate_20_pct' ? 0.8 : 0.9));
+    if (scenario.scenarioKind === 'delayed_timing') months += scenario.adjustmentTier === 'delay_6_months' ? 6 : 3;
+    if (scenario.scenarioKind === 'conservative_buffer') surplus += Math.round(baseline.monthlyExpenses * (scenario.adjustmentTier === 'moderate_20_pct' ? 0.2 : 0.1));
+    const initial = (profile.availableDeposit ?? 0) - (goal.competingGoals ?? []).reduce((sum,g) => sum + g.reservedAmount,0);
+    const beforeGoal = initial + surplus * months;
+    const ending = taskType === 'savings_goal' ? beforeGoal : beforeGoal - target;
+    const minimum = Math.min(initial, beforeGoal, ending);
+    const required = goal.cashReserveFloor + (taskType === 'savings_goal' ? target : 0);
+    const deficit = Math.max(0, required - ending, goal.cashReserveFloor - minimum);
+    const complete = baseline.isCalculationComplete && profile.essentialExpenses?.scope !== 'household';
+    const reliable = complete && baseline.isReliable;
+    return { assessmentScope:'monthly_budget', scenarioId:scenario.scenarioId, scenarioKind:scenario.scenarioKind,
+      adjustmentTier:scenario.adjustmentTier,targetAmount:target,targetHorizonMonths:months,monthlySurplus:surplus,
+      projectedEndingCash:ending,minimumProjectedCash:minimum,cashDeficit:deficit,isSatisfied:complete && deficit===0,
+      isReliable:reliable,isCalculationComplete:complete,
+      ...(!complete ? {missingFieldCategory:'expense_refinement' as const} : {}),
+      intraMonthLiquidityStatus:'not_assessed_monthly_budget',gapHorizon:deficit>0?toGapHorizonBucket(Math.max(1,months)):'none',
+      evidenceId:`ev_${scenario.scenarioId}_${callId ?? Date.now().toString(36)}` };
+  }
+
   const snapshotDate = parseStrictCalendarDate(profile.metadata.dataDate);
   const refYm = getProfileReferenceYm(profile);
   const baseline = calculateMonthlySurplus(profile, refYm.year, refYm.month, refYm);
@@ -532,7 +560,7 @@ export function toSafeToolResult(
   versionBinding: VersionBinding
 ): SafeToolResult {
   const status =
-    !calc.isCalculationComplete || calc.intraMonthLiquidityStatus !== 'verified'
+    !calc.isCalculationComplete || (calc.assessmentScope !== 'monthly_budget' && calc.intraMonthLiquidityStatus !== 'verified')
       ? 'unknown'
       : calc.isSatisfied
         ? 'satisfied'
@@ -545,6 +573,7 @@ export function toSafeToolResult(
     status,
     gapHorizon: calc.gapHorizon,
     isReliable: calc.isReliable,
+    ...(calc.assessmentScope ? {assessmentScope:calc.assessmentScope} : {}),
     ...(calc.missingFieldCategory ? { missingFieldCategory: calc.missingFieldCategory } : {}),
     evidenceId: calc.evidenceId,
     versionBinding,

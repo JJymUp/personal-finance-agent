@@ -1,3 +1,4 @@
+import { ConversationResponseSchema, type ConversationRequest } from '@maggot/contracts';
 /**
  * Unique outbound network entry point for apps/web.
  * NEVER imports UserProfile, exact amounts, nicknames, or Vault secrets.
@@ -27,4 +28,11 @@ export async function fetchServerHealth(): Promise<ServerHealthInfo> {
 export function createBrowserAgentTransport(): HttpClientTransport {
   // Empty baseUrl routes requests via same-origin `/api/...`
   return createHttpTransport('');
+}
+
+export async function sendConversation(request: ConversationRequest, signal?: AbortSignal) {
+  const response = await fetch('/api/conversation', {method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(request),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(75000)]):AbortSignal.timeout(75000)});
+  if(!response.ok) throw new Error(response.status===429?'消息发送得有点快，请稍后再试。':'这次回复没有完成，请稍后重试。');
+  return ConversationResponseSchema.parse(await response.json());
 }

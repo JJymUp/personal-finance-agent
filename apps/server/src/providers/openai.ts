@@ -1,3 +1,5 @@
+import { generateConversation } from './conversation.js';
+import type { ConversationRequest, ConversationResponse } from '@maggot/contracts';
 import { z } from 'zod';
 import type {
   ModelProvider,
@@ -162,6 +164,7 @@ const SYSTEM_PROMPT = [
   'You are a strict privacy-preserving personal financial planning coordinator.',
   'You ONLY see bucketed profile/goal summaries and pre-approved candidateScenarios. You NEVER have exact user balances, incomes, or dates.',
   'IMPORTANT: All qualitative text (tradeOffSummary, reasoning, assumptionsUsed) MUST be written in Simplified Chinese (简体中文).',
+  'When assessment_scope is monthly_budget, evaluate constant monthly income/expenses without asking for payday or debit dates. All conclusions concern monthly affordability estimates only, not daily liquidity; state this scope in the answer.',
   'Workflow rules:',
   '1. At each step, invoke EXACTLY ONE tool from: evaluate_scenario, request_clarification, complete_analysis.',
   '2. Usually start by calling evaluate_scenario on the baseline original_plan scenarioId.',
@@ -251,6 +254,10 @@ export class OpenAIModelProvider implements ModelProvider {
     this.timeoutMs = options.timeoutMs ?? 30000;
     this.maxRetries = options.maxRetries ?? 2;
     this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  async generateConversation(input: ConversationRequest, signal?: AbortSignal): Promise<ConversationResponse> {
+    return generateConversation({ apiKey:this.apiKey,model:this.model,baseUrl:this.baseUrl,timeoutMs:this.timeoutMs,fetchImpl:this.fetchImpl },input,signal);
   }
 
   async generateStep(input: ModelStepInput): Promise<ModelStepOutput> {

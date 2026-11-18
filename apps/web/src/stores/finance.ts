@@ -1,3 +1,4 @@
+import { ChatStateSchema, emptyChat, type ChatState } from '../features/chat/types';
 /**
  * Runtime-only Pinia Store (tech-stack.md §2).
  * NEVER auto-persists plaintext state to localStorage or sessionStorage!
@@ -17,6 +18,7 @@ import {
   DexieCheckpointStore,
 } from '../local/vault/dexie-storage';
 import {
+  VAULT_CHAT_KEY,
   VAULT_GOALS_KEY,
   VAULT_TXNS_KEY,
   VAULT_REPORTS_KEY,
@@ -105,6 +107,8 @@ export const useFinanceStore = defineStore('finance', () => {
 
   // In-memory state ONLY while unlocked
   const isUnlocked = ref(false);
+  const hasStoredVault = ref<boolean | null>(null);
+  const conversation = ref<ChatState>(emptyChat());
   const profile = ref<UserProfile | null>(null);
   const goal = ref<LargePurchaseGoal>(createDefaultGoal());
   const transactions = ref<Transaction[]>([]);
@@ -129,6 +133,16 @@ export const useFinanceStore = defineStore('finance', () => {
     void authorizationVersion.value;
     return gateway.isAuthorized(activeProviderId.value);
   });
+
+  const profileInitialized = computed(() => profile.value !== null && validateProfile(profile.value).completeness !== 'draft');
+  async function checkStoredVault(): Promise<void> { hasStoredVault.value=await vault.hasStoredVault(); }
+  async function saveConversation(next: ChatState): Promise<void> {
+    const generation=captureUnlockedSession();
+    const validated=ChatStateSchema.parse(next);
+    await vault.saveSecretJson(VAULT_CHAT_KEY,validated);
+    assertUnlockedSession(generation);
+    conversation.value=validated;
+  }
 
   const currentSnapshotVersion = computed(() =>
     profile.value ? `snap_${profile.value.metadata.version}` : 'snap_0'
@@ -187,12 +201,16 @@ export const useFinanceStore = defineStore('finance', () => {
       const loadedGoal = await vault.loadSecretJson<LargePurchaseGoal>(GOALS_KEY);
       const loadedTxns = await vault.loadSecretJson<Transaction[]>(TXNS_KEY);
       const loadedReports = await vault.loadSecretJson<SavedLocalReport[]>(REPORTS_KEY);
+      const loadedChat=await vault.loadSecretJson<unknown>(VAULT_CHAT_KEY);
 
       const restoredGoal = loadedGoal ?? createDefaultGoal();
       const checkpoint = await checkpointStore.load(restoredGoal.id);
       if (generation !== vaultSessionGeneration || !vault.isUnlocked()) {
         throw new Error('Vault session changed or locked during unlock');
       }
+      conversation.value=loadedChat ? ChatStateSchema.parse(loadedChat) : emptyChat();
+      conversation.value.messages=conversation.value.messages.map(message=>message.status==='pending'?{...message,status:'error',text:'上次回复中断了。你可以重新发送问题。'}:message);
+      hasStoredVault.value=true;
       profile.value = loadedProfile ?? createEmptyProfile();
       goal.value = restoredGoal;
       transactions.value = loadedTxns ?? [];
@@ -223,6 +241,7 @@ export const useFinanceStore = defineStore('finance', () => {
     authorizationVersion.value++;
     isUnlocked.value = false;
     profile.value = null;
+    conversation.value=emptyChat();
     goal.value = createDefaultGoal();
     transactions.value = [];
     savedReports.value = [];
@@ -343,6 +362,7 @@ export const useFinanceStore = defineStore('finance', () => {
     activeRunAbortController = null;
     clearCoordinatorHook = null;
     const imported = await vault.importBackup(backupJson, passphrase);
+    const loadedChat=await vault.loadSecretJson<unknown>(VAULT_CHAT_KEY);
     const loadedGoal = await vault.loadSecretJson<LargePurchaseGoal>(GOALS_KEY);
     const loadedTxns = await vault.loadSecretJson<Transaction[]>(TXNS_KEY);
     const loadedReports = await vault.loadSecretJson<SavedLocalReport[]>(REPORTS_KEY);
@@ -350,6 +370,7 @@ export const useFinanceStore = defineStore('finance', () => {
     const restoredGoal = loadedGoal ?? createDefaultGoal();
     const checkpoint = await checkpointStore.load(restoredGoal.id);
     assertUnlockedSession(generation);
+    conversation.value=loadedChat ? ChatStateSchema.parse(loadedChat) : emptyChat();
     profile.value = imported;
     goal.value = restoredGoal;
     transactions.value = loadedTxns ?? [];
@@ -371,11 +392,13 @@ export const useFinanceStore = defineStore('finance', () => {
   async function clearAllLocalData(): Promise<void> {
     lockVault();
     await vault.wipeAll();
+    hasStoredVault.value=false;
     await db.checkpoint_store.clear();
     gateway.revoke();
     authorizationVersion.value++;
     isUnlocked.value = false;
     profile.value = null;
+    conversation.value=emptyChat();
     goal.value = createDefaultGoal();
     transactions.value = [];
     savedReports.value = [];
@@ -384,6 +407,7 @@ export const useFinanceStore = defineStore('finance', () => {
 
   return {
     capabilities,
+    hasStoredVault, checkStoredVault, profileInitialized, conversation, saveConversation,
     vault,
     gateway,
     hasRecoverableCheckpoint,

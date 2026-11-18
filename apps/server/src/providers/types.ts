@@ -1,4 +1,6 @@
 import type {
+  ConversationRequest,
+  ConversationResponse,
   SafeProfileSummary,
   SafeGoalSummary,
   SafeScenarioDescriptor,
@@ -89,6 +91,7 @@ export type ModelStepOutput =
     };
 
 export interface ModelProvider {
+  generateConversation?(input: ConversationRequest, signal?: AbortSignal): Promise<ConversationResponse>;
   name: string;
   generateStep(input: ModelStepInput): Promise<ModelStepOutput>;
   answerFollowUp?(input: FollowUpInput): Promise<FollowUpOutput>;
